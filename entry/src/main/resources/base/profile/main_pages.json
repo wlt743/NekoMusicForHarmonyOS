@@ -1,0 +1,13 @@
+{
+  "src": [
+    "pages/Welcome",
+    "pages/Index",
+    "pages/PlayerPage",
+    "pages/PlaylistPage",
+    "pages/SettingsPage",
+    "pages/CommentsPage",
+    "pages/UploadPage",
+    "pages/MessagesPage",
+    "pages/VipPage"
+  ]
+}

@@ -1,0 +1,7 @@
+build/
+entry/build/
+.hvigor/
+oh_modules/
+.idea/
+local.properties
+.DS_Store

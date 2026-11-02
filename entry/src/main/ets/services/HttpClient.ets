@@ -1,0 +1,149 @@
+import { http } from "@kit.NetworkKit";
+import { APIConfig } from "./APIConfig";
+import { NonceService } from "./NonceService";
+import { ClientIdentityService } from "./ClientIdentityService";
+import { hilog } from '@kit.PerformanceAnalysisKit';
+
+/**
+ * 统一网络层：
+ * 1. 所有请求带客户端识别头
+ * 2. 除白名单外自动附加一次性 X-Neko-Nonce
+ * 3. 409 / 403 时换 nonce 重试一次
+ */
+export class HttpClient {
+  static async get(url: string, token: string = ""): Promise<string> {
+    return HttpClient.send(url, http.RequestMethod.GET, "", token);
+  }
+
+  static async post(url: string, body: string, token: string = ""): Promise<string> {
+    return HttpClient.send(url, http.RequestMethod.POST, body, token);
+  }
+
+  static async delete(url: string, token: string = ""): Promise<string> {
+    return HttpClient.send(url, http.RequestMethod.DELETE, "", token);
+  }
+
+  private static async send(url: string, method: http.RequestMethod,
+    body: string, token: string): Promise<string> {
+    const path: string = HttpClient.pathOf(url);
+    const rawQuery: string = HttpClient.queryOf(url);
+    const needsIdentity: boolean = APIConfig.requiresClientIdentity(path);
+    let nonceRefreshed: boolean = false;
+    let identityRefreshed: boolean = false;
+
+    for (let attempt: number = 0; attempt < 3; attempt++) {
+      const header: Record<string, string> = APIConfig.clientHeaders();
+      if (token.length > 0) {
+        header["Authorization"] = token;
+      }
+      if (method !== http.RequestMethod.GET) {
+        header["Content-Type"] = "application/json";
+      }
+
+      let nonce: string = "";
+      if (APIConfig.requiresNonce(path)) {
+        nonce = await NonceService.shared().nextNonce(method !== http.RequestMethod.GET);
+        header["X-Neko-Nonce"] = nonce;
+      }
+      if (needsIdentity) {
+        const bodyHash: string = await ClientIdentityService.bodyHashAsync(body);
+        let verb: string = "GET";
+        if (method === http.RequestMethod.POST) {
+          verb = "POST";
+        } else if (method === http.RequestMethod.DELETE) {
+          verb = "DELETE";
+        }
+        const identity: Record<string, string> = await ClientIdentityService.shared()
+          .headers(verb, path, rawQuery, bodyHash, nonce);
+        const keys: string[] = Object.keys(identity);
+        for (const key of keys) {
+          header[key] = identity[key];
+        }
+      }
+
+      hilog.info(0x0000, 'NekoHttp', 'request %{public}s %{public}s body=%{public}s',
+        method, url.substring(0, 60), body.length > 0 ? body.substring(0, 80) : "(empty)");
+      const request: http.HttpRequest = http.createHttp();
+      try {
+        const response: http.HttpResponse = await request.request(url, {
+          method: method,
+          header: header,
+          extraData: body.length > 0 ? body : undefined,
+          expectDataType: http.HttpDataType.STRING,
+          connectTimeout: 30000,
+          readTimeout: 60000
+        });
+        const code: number = response.responseCode;
+        const text: string = (response.result as string) ?? "";
+        hilog.info(0x0000, 'NekoHttp', 'response code=%{public}d body=%{public}s', code,
+          text.length > 120 ? text.substring(0, 120) : text);
+
+        if (code === 409 && !nonceRefreshed) {
+          // 整池 nonce 一起过期时，只换下一个必然再失败：清空后重新解 PoW
+          nonceRefreshed = true;
+          NonceService.shared().invalidatePool();
+          continue;
+        }
+        if (code === 409) {
+          throw new Error("请求被服务端拒绝，请检查网络环境");
+        }
+        if (code === 401) {
+          const headers: Record<string, string> = response.header as Record<string, string>;
+          const clientStatus: string = (headers["x-neko-client-status"] ?? "") as string;
+          if (clientStatus.toLowerCase() === "invalid" && !identityRefreshed) {
+            identityRefreshed = true;
+            ClientIdentityService.shared().invalidate();
+            continue;
+          }
+          throw new Error("登录已失效");
+        }
+        if (code < 200 || code >= 300) {
+          throw new Error("请求失败(" + code + "): " + text.substring(0, 120));
+        }
+        return text;
+      } finally {
+        request.destroy();
+      }
+    }
+    throw new Error("请求失败");
+  }
+
+  private static pathOf(url: string): string {
+    let path: string = url;
+    const schemeIndex: number = url.indexOf("://");
+    if (schemeIndex >= 0) {
+      const pathIndex: number = url.indexOf("/", schemeIndex + 3);
+      path = pathIndex >= 0 ? url.substring(pathIndex) : "/";
+    }
+    const q: number = path.indexOf("?");
+    return q >= 0 ? path.substring(0, q) : path;
+  }
+
+  private static queryOf(url: string): string {
+    const q: number = url.indexOf("?");
+    return q >= 0 ? url.substring(q + 1) : "";
+  }
+
+  /**
+   * 音频接口现在返回 {"data":{"url":"/media/..."}}，
+   * 需要先换成真实地址再交给播放器。
+   */
+  static async resolveAudioURL(musicId: number, quality: string = "hq"): Promise<string> {
+    const text: string = await HttpClient.get(APIConfig.musicFileURL(musicId, quality));
+    const json: AudioFileResponse = JSON.parse(text) as AudioFileResponse;
+    if (!json.success || json.data === undefined) {
+      throw new Error(json.message ?? "无法获取播放地址");
+    }
+    return APIConfig.buildFullURL(json.data.url);
+  }
+}
+
+interface AudioFileData {
+  url: string;
+}
+
+interface AudioFileResponse {
+  success: boolean;
+  message: string;
+  data?: AudioFileData;
+}
