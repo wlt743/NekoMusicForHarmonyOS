@@ -36,12 +36,9 @@ export struct SourceSetup {
           this.errorText = error;
           return;
         }
-        if (this.enterAfterSave) {
-          router.replaceUrl({ url: 'pages/Index' });
-        } else if (this.onSaved !== undefined) {
-          const callback = this.onSaved;
-          callback();
-        }
+        // 换源后清空导航栈并回首页，避免残留上一个服务器的页面与数据
+        router.clear();
+        router.replaceUrl({ url: 'pages/Index' });
       });
   }
 
@@ -115,12 +112,8 @@ export struct SourceSetup {
           if (this.isPreset(item.kind)) {
             ServerConfig.verifyAndSave(item.kind, ServerConfig.presetURL, '', '', '').then((error: string) => {
               if (error.length === 0) {
-                if (this.enterAfterSave) {
-                  router.replaceUrl({ url: 'pages/Index' });
-                } else if (this.onSaved !== undefined) {
-                  const callback = this.onSaved;
-                  callback();
-                }
+                router.clear();
+                router.replaceUrl({ url: 'pages/Index' });
               }
             });
           } else {

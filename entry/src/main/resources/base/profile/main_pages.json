@@ -8,7 +8,6 @@
     "pages/CommentsPage",
     "pages/UploadPage",
     "pages/MessagesPage",
-    "pages/VipPage",
     "pages/ServerConfigPage"
   ]
 }
