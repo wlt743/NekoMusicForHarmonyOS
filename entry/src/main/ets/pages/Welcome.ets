@@ -1,5 +1,6 @@
 import { router } from '@kit.ArkUI';
 import { ServerConfig } from '../services/ServerConfig';
+import { SourceSetup } from '../components/SourceSetup';
 
 /**
  * 首次启动：先确认声明，再选择接口服务器。
@@ -113,74 +114,25 @@ struct Welcome {
 
   @Builder
   private choiceStep() {
-    Column({ space: 16 }) {
+    Column({ space: 14 }) {
       Text('选择音乐来源')
         .fontSize(24)
         .fontWeight(FontWeight.Bold)
         .fontColor('#FFFFFF')
         .width('100%')
-      Text('本应用不内置曲库。你可以使用社区常用地址，也可以填写自己的接口服务器。内容来源与合法性由你自行确认。')
+      Text('本应用不内置曲库。请选择来源类型，或填写你自己的服务器。内容来源与合法性由你自行确认。')
         .fontSize(13)
         .fontColor('#99FFFFFF')
         .width('100%')
 
-      Column({ space: 4 }) {
-        Text('使用 NekoMusic 资源')
-          .fontSize(16)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#FFFFFF')
-          .width('100%')
-        Text('社区常用地址，由第三方提供与维护')
-          .fontSize(12)
-          .fontColor('#99FFFFFF')
-          .width('100%')
-      }
-      .width('100%')
-      .padding(16)
-      .borderRadius(16)
-      .backgroundColor('#0DFFFFFF')
-      .onClick(() => {
-        ServerConfig.usePreset().then(() => { router.replaceUrl({ url: 'pages/Index' }); });
-      })
-
-      Column({ space: 10 }) {
-        Text('自己配置')
-          .fontSize(16)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#FFFFFF')
-          .width('100%')
-        TextInput({ placeholder: 'https://你的服务器地址', text: this.customInput })
-          .type(InputType.Normal)
-          .height(44)
-          .backgroundColor('#14FFFFFF')
-          .onChange((value: string) => { this.customInput = value; })
-        if (this.errorText.length > 0) {
-          Text(this.errorText)
-            .fontSize(12)
-            .fontColor('#FF7A7A')
-            .width('100%')
+      Scroll() {
+        Column() {
+          SourceSetup({ enterAfterSave: true })
         }
-        Button('使用这个地址')
-          .width('100%')
-          .height(42)
-          .backgroundColor('#24FFFFFF')
-          .onClick(() => {
-            ServerConfig.useCustom(this.customInput).then((ok: boolean) => {
-              if (ok) {
-                this.errorText = '';
-                router.replaceUrl({ url: 'pages/Index' });
-              } else {
-                this.errorText = '地址无效，请填入以 http:// 或 https:// 开头的完整地址';
-              }
-            });
-          })
+        .width('100%')
       }
-      .width('100%')
-      .padding(16)
-      .borderRadius(16)
-      .backgroundColor('#0DFFFFFF')
-
-      Blank()
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
 
       Text('返回声明确认')
         .fontSize(13)
