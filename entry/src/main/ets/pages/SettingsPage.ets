@@ -1,4 +1,5 @@
 import { AuthService, NekoUser } from '../services/AuthService';
+import { ServerConfig } from '../services/ServerConfig';
 import { WallpaperService } from '../services/WallpaperService';
 import { RemoteImage } from '../components/RemoteImage';
 import { HttpClient } from '../services/HttpClient';
@@ -253,6 +254,24 @@ struct SettingsPage {
               })
               this.row('清除壁纸', '恢复纯色背景', () => {
                 this.clearWallpaper();
+              })
+            }
+            .borderRadius(22)
+            .clip(true)
+            .shadow({ radius: 18, color: '#0F000000', offsetY: 6 })
+          }
+          .width('100%')
+
+          // 接口服务器
+          Column() {
+            Text('服务')
+              .fontSize(13)
+              .fontColor('#999999')
+              .width('100%')
+              .padding({ left: 4, bottom: 8 })
+            Column({ space: 1 }) {
+              this.row('接口服务器', ServerConfig.baseURL.length > 0 ? '已配置' : '未配置', () => {
+                router.pushUrl({ url: 'pages/ServerConfigPage' });
               })
             }
             .borderRadius(22)
